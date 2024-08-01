@@ -9,9 +9,9 @@ import (
 	"runtime"
 
 	"github.com/golang/glog"
+	"github.com/jalapeno/igp-processor/pkg/arangodb"
+	"github.com/jalapeno/igp-processor/pkg/kafkamessenger"
 	"github.com/jalapeno/topology/pkg/kafkanotifier"
-	"www.github.com/jalapeno/igp-processor/pkg/arangodb"
-	"www.github.com/jalapeno/igp-processor/pkg/kafkamessenger"
 
 	_ "net/http/pprof"
 )
@@ -28,19 +28,19 @@ const (
 )
 
 var (
-	msgSrvAddr   string
-	dbSrvAddr    string
-	dbName       string
-	dbUser       string
-	dbPass       string
-	lsprefix     string
-	lslink       string
-	lssrv6sid    string
-	lsnode       string
-	lsnodeExt    string
-	igpdomain    string
-	lsv4Topology string
-	lsv6Topology string
+	msgSrvAddr string
+	dbSrvAddr  string
+	dbName     string
+	dbUser     string
+	dbPass     string
+	lsprefix   string
+	lslink     string
+	lssrv6sid  string
+	lsnode     string
+	lsnodeExt  string
+	igpDomain  string
+	lsv4Graph  string
+	lsv6Graph  string
 )
 
 func init() {
@@ -62,9 +62,9 @@ func init() {
 	flag.StringVar(&lssrv6sid, "ls_srv6_sid", "ls_srv6_sid", "ls_srv6_sid Collection name, default: \"ls_srv6_sid\"")
 	flag.StringVar(&lsnode, "ls_node", "ls_node", "ls_node Collection name, default \"ls_node\"")
 	flag.StringVar(&lsnodeExt, "ls_node_extended", "ls_node_extended", "ls_node_extended Collection name, default \"ls_node_extended\"")
-	flag.StringVar(&igpdomain, "igp_domain", "igp_domain", "igp_domain Collection name, default \"igp_domain\"")
-	flag.StringVar(&lsv4Topology, "lsv4_topology", "lsv4_topology", "lsv4_topology Collection name, default \"lsv4_topology\"")
-	flag.StringVar(&lsv6Topology, "lsv6_topology", "lsv6_topology", "lsv6_topology Collection name, default \"lsv6_topology\"")
+	flag.StringVar(&igpDomain, "igp_domain", "igp_domain", "igp_domain Collection name, default \"igp_domain\"")
+	flag.StringVar(&lsv4Graph, "lsv4_graph", "lsv4_graph", "lsv4_graph Collection name, default \"lsv4_graph\"")
+	flag.StringVar(&lsv6Graph, "lsv6_graph", "lsv6_graph", "lsv6_graph Collection name, default \"lsv6_graph\"")
 }
 
 var (
@@ -108,7 +108,7 @@ func main() {
 	}
 
 	dbSrv, err := arangodb.NewDBSrvClient(dbSrvAddr, dbUser, dbPass, dbName, lsprefix, lslink, lssrv6sid, lsnode,
-		lsnodeExt, igpdomain, lsv4Topology, lsv6Topology, notifier)
+		lsnodeExt, igpDomain, lsv4Graph, lsv6Graph, notifier)
 	if err != nil {
 		glog.Errorf("failed to initialize databse client with error: %+v", err)
 		os.Exit(1)

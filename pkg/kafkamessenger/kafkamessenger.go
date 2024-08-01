@@ -16,6 +16,7 @@ var (
 		kafkanotifier.LSSRv6SIDEventTopic: bmp.LSSRv6SIDMsg,
 		kafkanotifier.LSNodeEventTopic:    bmp.LSNodeMsg,
 		kafkanotifier.LSPrefixEventTopic:  bmp.LSPrefixMsg,
+		kafkanotifier.LSLinkEventTopic:    bmp.LSLinkMsg,
 	}
 )
 

@@ -1,4 +1,4 @@
-module www.github.com/jalapeno/igp-processor
+module github.com/jalapeno/igp-processor
 
 go 1.17
 

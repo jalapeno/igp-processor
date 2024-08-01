@@ -23,15 +23,17 @@ type arangoDB struct {
 	lssrv6sid driver.Collection
 	lsnode    driver.Collection
 	lsnodeExt driver.Collection
-	igpdomain driver.Collection
-	graph     driver.Collection
-	lsv4topo  driver.Graph
-	lsv6topo  driver.Graph
+	igpDomain driver.Collection
+	graphv4   driver.Collection
+	graphv6   driver.Collection
+	lsv4Graph driver.Graph
+	lsv6Graph driver.Graph
+	notifier  kafkanotifier.Event
 }
 
 // NewDBSrvClient returns an instance of a DB server client process
 func NewDBSrvClient(arangoSrv, user, pass, dbname, lsprefix, lslink, lssrv6sid, lsnode,
-	lsnodeExt string, igpdomain string, lsv4topo string, lsv6topo string, notifier kafkanotifier.Event) (dbclient.Srv, error) {
+	lsnodeExt string, igpDomain string, lsv4Graph string, lsv6Graph string, notifier kafkanotifier.Event) (dbclient.Srv, error) {
 	if err := tools.URLAddrValidation(arangoSrv); err != nil {
 		return nil, err
 	}
@@ -65,7 +67,7 @@ func NewDBSrvClient(arangoSrv, user, pass, dbname, lsprefix, lslink, lssrv6sid, 
 	if err != nil {
 		return nil, err
 	}
-	// Check if graph exists, if not fail as Jalapeno ipv4_topology is not running
+	// Check if graph exists, if not fail as Jalapeno topology is not running
 	arango.lsnode, err = arango.db.Collection(context.TODO(), lsnode)
 	if err != nil {
 		return nil, err
@@ -102,12 +104,12 @@ func NewDBSrvClient(arangoSrv, user, pass, dbname, lsprefix, lslink, lssrv6sid, 
 	// }
 
 	// check for igp_domain collection
-	found, err = arango.db.CollectionExists(context.TODO(), igpdomain)
+	found, err = arango.db.CollectionExists(context.TODO(), igpDomain)
 	if err != nil {
 		return nil, err
 	}
 	if found {
-		c, err := arango.db.Collection(context.TODO(), igpdomain)
+		c, err := arango.db.Collection(context.TODO(), igpDomain)
 		if err != nil {
 			return nil, err
 		}
@@ -118,23 +120,23 @@ func NewDBSrvClient(arangoSrv, user, pass, dbname, lsprefix, lslink, lssrv6sid, 
 	// create igp_domain collection
 	var igpdomain_options = &driver.CreateCollectionOptions{ /* ... */ }
 	glog.V(5).Infof("igp_domain collection not found, creating")
-	arango.igpdomain, err = arango.db.CreateCollection(context.TODO(), "igp_domain", igpdomain_options)
+	arango.igpDomain, err = arango.db.CreateCollection(context.TODO(), "igp_domain", igpdomain_options)
 	if err != nil {
 		return nil, err
 	}
 	// check if collection exists, if not fail as processor has failed to create collection
-	arango.igpdomain, err = arango.db.Collection(context.TODO(), igpdomain)
+	arango.igpDomain, err = arango.db.Collection(context.TODO(), igpDomain)
 	if err != nil {
 		return nil, err
 	}
 
 	// check for lsv4 topology graph
-	found, err = arango.db.GraphExists(context.TODO(), lsv4topo)
+	found, err = arango.db.GraphExists(context.TODO(), lsv4Graph)
 	if err != nil {
 		return nil, err
 	}
 	if found {
-		c, err := arango.db.Graph(context.TODO(), lsv4topo)
+		c, err := arango.db.Graph(context.TODO(), lsv4Graph)
 		if err != nil {
 			return nil, err
 		}
@@ -143,21 +145,55 @@ func NewDBSrvClient(arangoSrv, user, pass, dbname, lsprefix, lslink, lssrv6sid, 
 	} else {
 		// create graph
 		var edgeDefinition driver.EdgeDefinition
-		edgeDefinition.Collection = "ls_topology_v4"
+		edgeDefinition.Collection = "lsv4_graph"
 		edgeDefinition.From = []string{"ls_node_extended"}
 		edgeDefinition.To = []string{"ls_node_extended"}
 		var options driver.CreateGraphOptions
 		options.OrphanVertexCollections = []string{"ls_srv6_sid", "ls_prefix"}
 		options.EdgeDefinitions = []driver.EdgeDefinition{edgeDefinition}
 
-		arango.lsv4topo, err = arango.db.CreateGraph(context.TODO(), lsv4topo, &options)
+		arango.lsv4Graph, err = arango.db.CreateGraph(context.TODO(), lsv4Graph, &options)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// check if graph exists, if not fail as processor has failed to create graph
-	arango.graph, err = arango.db.Collection(context.TODO(), "ls_topology_v4")
+	// check if lsv4 graph exists, if not fail as processor has failed to create graph
+	arango.graphv4, err = arango.db.Collection(context.TODO(), "lsv4_graph")
+	if err != nil {
+		return nil, err
+	}
+
+	// check for lsv6 topology graph
+	found, err = arango.db.GraphExists(context.TODO(), lsv6Graph)
+	if err != nil {
+		return nil, err
+	}
+	if found {
+		c, err := arango.db.Graph(context.TODO(), lsv6Graph)
+		if err != nil {
+			return nil, err
+		}
+		glog.Infof("found graph %s", c)
+
+	} else {
+		// create graph
+		var edgeDefinition driver.EdgeDefinition
+		edgeDefinition.Collection = "lsv6_graph"
+		edgeDefinition.From = []string{"ls_node_extended"}
+		edgeDefinition.To = []string{"ls_node_extended"}
+		var options driver.CreateGraphOptions
+		options.OrphanVertexCollections = []string{"ls_srv6_sid", "ls_prefix"}
+		options.EdgeDefinitions = []driver.EdgeDefinition{edgeDefinition}
+
+		arango.lsv6Graph, err = arango.db.CreateGraph(context.TODO(), lsv6Graph, &options)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// check if lsv6 graph exists, if not fail as processor has failed to create graph
+	arango.graphv6, err = arango.db.Collection(context.TODO(), "lsv6_graph")
 	if err != nil {
 		return nil, err
 	}
@@ -344,10 +380,10 @@ func (a *arangoDB) loadCollection() error {
 	}
 	defer cursor.Close()
 
-	// Build lsv4 topology
+	// Build lsv4_graph
 
-	lslinkquery := "for l in " + a.lslink.Name() + " filter l.protocol_id != 7 RETURN l"
-	cursor, err = a.db.Query(ctx, lslinkquery, nil)
+	lsv4linkquery := "for l in " + a.lslink.Name() + " filter l.protocol_id != 7 RETURN l"
+	cursor, err = a.db.Query(ctx, lsv4linkquery, nil)
 	if err != nil {
 		return err
 	}
@@ -367,10 +403,10 @@ func (a *arangoDB) loadCollection() error {
 		}
 	}
 
-	lspfxquery := "for l in " + a.lsprefix.Name() + //" filter l.mt_id_tlv == null return l"
+	lsv4pfxquery := "for l in " + a.lsprefix.Name() + //" filter l.mt_id_tlv == null return l"
 		" filter l.mt_id_tlv.mt_id != 2 && l.prefix_len != 30 && " +
 		"l.prefix_len != 31 && l.prefix_len != 32 return l"
-	cursor, err = a.db.Query(ctx, lspfxquery, nil)
+	cursor, err = a.db.Query(ctx, lsv4pfxquery, nil)
 	if err != nil {
 		return err
 	}
@@ -385,6 +421,51 @@ func (a *arangoDB) loadCollection() error {
 			return err
 		}
 		if err := a.processLSPrefixEdge(ctx, meta.Key, &p); err != nil {
+			glog.Errorf("failed to process key: %s with error: %+v", meta.Key, err)
+			continue
+		}
+	}
+
+	// Build lsv6_graph
+	lsv6linkquery := "for l in " + a.lslink.Name() + " filter l.protocol_id != 7 RETURN l"
+	cursor, err = a.db.Query(ctx, lsv6linkquery, nil)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	for {
+		var p message.LSLink
+		meta, err := cursor.ReadDocument(ctx, &p)
+		//glog.Infof("processing lslink document: %+v", p)
+		if driver.IsNoMoreDocuments(err) {
+			break
+		} else if err != nil {
+			return err
+		}
+		if err := a.processLSv6LinkEdge(ctx, meta.Key, &p); err != nil {
+			glog.Errorf("failed to process key: %s with error: %+v", meta.Key, err)
+			continue
+		}
+	}
+
+	lsv6pfxquery := "for l in " + a.lsprefix.Name() + //" filter l.mt_id_tlv == null return l"
+		" filter l.mt_id_tlv.mt_id == 2 && l.prefix_len != 126 && " +
+		"l.prefix_len != 127 && l.prefix_len != 128 return l"
+	cursor, err = a.db.Query(ctx, lsv6pfxquery, nil)
+	if err != nil {
+		return err
+	}
+	defer cursor.Close()
+	for {
+		var p message.LSPrefix
+		meta, err := cursor.ReadDocument(ctx, &p)
+		//glog.Infof("processing lsprefix document: %+v", p)
+		if driver.IsNoMoreDocuments(err) {
+			break
+		} else if err != nil {
+			return err
+		}
+		if err := a.processLSv6PrefixEdge(ctx, meta.Key, &p); err != nil {
 			glog.Errorf("failed to process key: %s with error: %+v", meta.Key, err)
 			continue
 		}

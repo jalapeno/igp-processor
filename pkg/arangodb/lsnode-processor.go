@@ -318,7 +318,7 @@ func (a *arangoDB) processIgpDomain(ctx context.Context, key string, e *message.
 		}
 	}
 
-	if _, err := a.igpdomain.CreateDocument(ctx, &sn); err != nil {
+	if _, err := a.igpDomain.CreateDocument(ctx, &sn); err != nil {
 		glog.Infof("adding igp_domain: %s with area_id %s ", sn.Key, e.ASN)
 		if !driver.IsConflict(err) {
 			return err
@@ -329,7 +329,7 @@ func (a *arangoDB) processIgpDomain(ctx context.Context, key string, e *message.
 			}
 		}
 		// The document already exists, updating it with the latest info
-		if _, err := a.igpdomain.UpdateDocument(ctx, ns.Key, e); err != nil {
+		if _, err := a.igpDomain.UpdateDocument(ctx, ns.Key, e); err != nil {
 			return err
 		}
 		return nil
