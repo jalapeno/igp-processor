@@ -1,0 +1,4 @@
+FROM scratch
+
+COPY ./bin/igp-processor /igp-processor
+ENTRYPOINT ["/igp-processor"]
